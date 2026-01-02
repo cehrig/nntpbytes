@@ -42,9 +42,7 @@ impl TryFrom<&str> for NewsServer {
             .to_string();
 
         let port = match parts.next() {
-            Some(port_str) => port_str
-                .parse::<u16>()
-                .map_err(|e| Error::ServerPortInvalid(port_str.to_string()))?,
+            Some(port_str) => port_str.parse::<u16>().map_err(Error::ServerPortInvalid)?,
             None => DEFAULT_NNTP_PORT,
         };
 

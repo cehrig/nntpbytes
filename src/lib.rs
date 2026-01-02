@@ -1,4 +1,6 @@
+use rustls_pki_types::InvalidDnsNameError;
 use std::fmt::{Debug, Formatter};
+use std::num::ParseIntError;
 
 pub mod connection;
 pub mod messages;
@@ -8,8 +10,8 @@ type Result<T> = std::result::Result<T, Error>;
 
 pub enum Error {
     ServerNameNotFound,
-    ServerPortInvalid(String),
-    InvalidSni,
+    ServerPortInvalid(ParseIntError),
+    InvalidSni(InvalidDnsNameError),
     TcpError(std::io::Error),
     TlsError(std::io::Error),
     ReadError(std::io::Error),
@@ -41,8 +43,8 @@ impl Debug for Error {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
         let e = match self {
             Error::ServerNameNotFound => format!("Server must not be empty"),
-            Error::ServerPortInvalid(e) => format!("Port {} is invalid", e),
-            Error::InvalidSni => format!("SNI is invalid"),
+            Error::ServerPortInvalid(e) => format!("Port is invalid {}", e),
+            Error::InvalidSni(e) => format!("SNI is invalid {}", e),
             Error::TcpError(e) => format!("Unable to TCP connect {}", e),
             Error::TlsError(e) => format!("Unable to TLS handshake {}", e),
             Error::ReadError(e) => format!("Read failed with error {}", e),

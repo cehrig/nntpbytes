@@ -4,18 +4,24 @@ use std::io::Write;
 use std::ops::Deref;
 
 pub mod auth;
+pub mod date;
 pub mod greeting;
 
 pub use greeting::*;
 
+// Message Response COde
 type ResponseCode = u16;
 
+// Message Response Type
 type IsMultiLineResponse = bool;
 
+// Response Code to Response Type mappings
 type ResponseCodeTuples = &'static [(ResponseCode, IsMultiLineResponse)];
 
+// Single Line Termination sequence
 const SINGLE_LINE_TERMINATION: &[u8] = b"\r\n";
 
+// Multi Line Termination sequence
 const MULTI_LINE_TERMINATION: &[u8] = b".\r\n";
 
 #[derive(Default)]
@@ -74,7 +80,7 @@ where
 {
     const CODES: ResponseCodeTuples = &[(0, false)];
 
-    fn decoder(&mut self, bytes: &mut BytesMut, code: u16) -> Result<()> {
+    fn decoder(&mut self, bytes: &mut BytesMut, _: u16) -> Result<()> {
         if bytes.len() < 3 {
             return Err(Error::DecodeNeedMoreBytes);
         };
@@ -101,7 +107,7 @@ impl<T> Deref for GenericMessage<T> {
 impl Decode for () {
     const CODES: ResponseCodeTuples = &[];
 
-    fn decoder(&mut self, bytes: &mut BytesMut, code: u16) -> Result<()>
+    fn decoder(&mut self, _: &mut BytesMut, _: u16) -> Result<()>
     where
         Self: Sized,
     {

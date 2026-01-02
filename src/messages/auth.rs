@@ -1,4 +1,4 @@
-use crate::messages::{Decode, Encode, ExpectedResponse, GenericMessage, ResponseCodeTuples};
+use crate::messages::{Decode, Encode, ExpectedResponse, ResponseCodeTuples};
 use crate::{Error, Result};
 use bytes::{BufMut, BytesMut};
 use std::io::Write;
@@ -45,13 +45,13 @@ impl Encode for AuthinfoRequest {
 }
 
 impl ExpectedResponse for AuthinfoRequest {
-    type Response = GenericMessage<AuthinfoResponse>;
+    type Response = AuthinfoResponse;
 }
 
 impl Decode for AuthinfoResponse {
     const CODES: ResponseCodeTuples = &[(281, false), (381, false), (502, false)];
 
-    fn decoder(&mut self, bytes: &mut BytesMut, code: u16) -> Result<()>
+    fn decoder(&mut self, bytes: &mut BytesMut, _: u16) -> Result<()>
     where
         Self: Sized,
     {

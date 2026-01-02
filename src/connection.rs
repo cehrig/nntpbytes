@@ -95,12 +95,12 @@ impl NewsConnection {
 
         let connector = tls_connector();
         let sni = rustls_pki_types::ServerName::try_from(server.name().to_string())
-            .map_err(|e| Error::InvalidSni)?;
+            .map_err(Error::InvalidSni)?;
 
         Ok(Self {
             server,
             bytes,
-            inner: NewsConnectionKind::Tls(
+            inner: NewsConnectionKind::tls(
                 connector
                     .connect(sni, stream)
                     .await
@@ -113,7 +113,7 @@ impl NewsConnection {
         &self.server
     }
 
-    pub async fn request<T>(&mut self, request: T) -> Result<T::Response>
+    pub async fn request<T>(&mut self, request: T) -> Result<GenericMessage<T::Response>>
     where
         T: Encode + ExpectedResponse,
         T::Response: Default + Decode,
@@ -122,7 +122,7 @@ impl NewsConnection {
         request.encode(&mut buffer)?;
 
         self.write(buffer).await?;
-        self.read::<T::Response>().await
+        self.read::<GenericMessage<T::Response>>().await
     }
 
     async fn read<T>(&mut self) -> Result<T>
