@@ -1,4 +1,6 @@
-use crate::messages::{Decode, Encode, ExpectedResponse, GenericMessage, GreetingResponse};
+use crate::decoder::decoder::{Decode, Decoder, Encode, ExpectedResponse};
+use crate::decoder::ExpectedResponseCode;
+use crate::messages::{GreetingResponse, Response};
 use crate::server::NewsServer;
 use crate::{Error, Result};
 use bytes::{Buf, BytesMut};
@@ -55,7 +57,6 @@ impl NewsConnectionKind {
 
 pub struct NewsConnection {
     server: NewsServer,
-    bytes: BytesMut,
     inner: NewsConnectionKind,
 }
 
@@ -66,7 +67,7 @@ impl NewsConnection {
             false => Self::connect_plaintext(server).await,
         }?;
 
-        conn.read::<GenericMessage<GreetingResponse>>().await?;
+        conn.read::<Response<GreetingResponse>>().await?;
 
         Ok(conn)
     }
@@ -78,7 +79,6 @@ impl NewsConnection {
 
         Ok(Self {
             server,
-            bytes: BytesMut::new(),
             inner: NewsConnectionKind::plaintext(stream),
         })
     }
@@ -86,7 +86,6 @@ impl NewsConnection {
     async fn connect_tls(server: NewsServer) -> Result<Self> {
         let NewsConnection {
             server,
-            bytes,
             inner: NewsConnectionKind::Plaintext(stream),
         } = Self::connect_plaintext(server).await?
         else {
@@ -99,7 +98,6 @@ impl NewsConnection {
 
         Ok(Self {
             server,
-            bytes,
             inner: NewsConnectionKind::tls(
                 connector
                     .connect(sni, stream)
@@ -113,28 +111,37 @@ impl NewsConnection {
         &self.server
     }
 
-    pub async fn request<T>(&mut self, request: T) -> Result<GenericMessage<T::Response>>
+    pub async fn request<T>(&mut self, request: T) -> Result<Response<T::Response>>
     where
         T: Encode + ExpectedResponse,
-        T::Response: Default + Decode,
+        T::Response: Default + Decode + ExpectedResponseCode,
+    {
+        self.request_explicit::<T::Response, T>(request).await
+    }
+
+    pub async fn request_explicit<R, T>(&mut self, request: T) -> Result<Response<R>>
+    where
+        T: Encode + ExpectedResponse,
+        R: Default + Decode + ExpectedResponseCode,
     {
         let mut buffer = BytesMut::new();
         request.encode(&mut buffer)?;
 
         self.write(buffer).await?;
-        self.read::<GenericMessage<T::Response>>().await
+        self.read::<Response<R>>().await
     }
 
     async fn read<T>(&mut self) -> Result<T>
     where
-        T: Default + Decode,
+        T: Default + Decode + ExpectedResponseCode,
     {
         let mut data = T::default();
+        let mut decoder = Decoder::new();
 
         loop {
-            let _ = self.inner.read(&mut self.bytes).await?;
+            let _ = self.inner.read(&mut decoder).await?;
 
-            match data.decode(&mut self.bytes, 0) {
+            match data.decode(&mut decoder, 0) {
                 Ok(_) => return Ok(data),
                 Err(Error::DecodeNeedMoreBytes) => continue,
                 Err(e) => return Err(e),

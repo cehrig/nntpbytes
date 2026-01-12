@@ -1,13 +1,15 @@
 use rustls_pki_types::InvalidDnsNameError;
-use std::fmt::{Debug, Formatter};
+use std::fmt::{Debug, Display, Formatter};
 use std::num::ParseIntError;
 
 pub mod connection;
+pub mod decoder;
 pub mod messages;
 pub mod server;
 
 type Result<T> = std::result::Result<T, Error>;
 
+#[derive(Debug)]
 pub enum Error {
     ServerNameNotFound,
     ServerPortInvalid(ParseIntError),
@@ -19,6 +21,7 @@ pub enum Error {
     Eof,
     UnexpectedResponseCode(u16),
     DecodeNeedMoreBytes,
+    DecodeFromStr,
     DecodeError(Box<dyn std::error::Error>),
     EncodeError(Box<dyn std::error::Error>),
 }
@@ -39,7 +42,7 @@ impl Error {
     }
 }
 
-impl Debug for Error {
+impl Display for Error {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
         let e = match self {
             Error::ServerNameNotFound => format!("Server must not be empty"),
@@ -53,6 +56,7 @@ impl Debug for Error {
             Error::UnexpectedResponseCode(c) => format!("Unexpected response code {}", c),
             Error::DecodeNeedMoreBytes => format!("Need more bytes"),
             Error::DecodeError(e) => format!("Decode error {}", e),
+            Error::DecodeFromStr => format!("Attempt to decode from string failed"),
             Error::EncodeError(e) => format!("Encode error {}", e),
         };
 
@@ -60,18 +64,4 @@ impl Debug for Error {
     }
 }
 
-trait Pipe {
-    fn pipe<F, U>(self, cb: F) -> U
-    where
-        F: Fn(Self) -> U,
-        Self: Sized;
-}
-
-impl<T> Pipe for T {
-    fn pipe<F, U>(self, cb: F) -> U
-    where
-        F: Fn(T) -> U,
-    {
-        cb(self)
-    }
-}
+impl std::error::Error for Error {}

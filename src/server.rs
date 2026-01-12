@@ -3,6 +3,7 @@ use std::fmt::{Display, Formatter};
 
 const DEFAULT_NNTP_PORT: u16 = 563;
 
+#[derive(Clone)]
 pub struct NewsServer {
     name: String,
     port: u16,
