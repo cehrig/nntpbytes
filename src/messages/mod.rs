@@ -1,130 +1,72 @@
-use crate::{Error, Pipe, Result};
-use bytes::{BufMut, BytesMut};
-use std::io::Write;
+use crate::decoder::{Decode, Decoder, ExpectedResponse, ExpectedResponseCode, ResponseCodeTuples};
+use crate::{Error, Result};
 use std::ops::Deref;
 
+pub mod article;
 pub mod auth;
+pub mod capabilities;
 pub mod date;
 pub mod greeting;
+pub mod group;
+pub mod head;
+pub mod list;
+pub mod newsgroups;
+pub mod xover;
 
 pub use greeting::*;
 
-// Message Response COde
-type ResponseCode = u16;
-
-// Message Response Type
-type IsMultiLineResponse = bool;
-
-// Response Code to Response Type mappings
-type ResponseCodeTuples = &'static [(ResponseCode, IsMultiLineResponse)];
-
-// Single Line Termination sequence
-const SINGLE_LINE_TERMINATION: &[u8] = b"\r\n";
-
-// Multi Line Termination sequence
-const MULTI_LINE_TERMINATION: &[u8] = b".\r\n";
-
 #[derive(Default)]
-pub struct GenericMessage<T> {
+pub struct Response<T> {
     code: u16,
     kind: T,
 }
 
-pub(crate) trait Decode {
-    const CODES: ResponseCodeTuples;
-
-    fn decode(&mut self, bytes: &mut BytesMut, code: u16) -> Result<()>
-    where
-        Self: Sized,
-    {
-        // Check if response code is expected and the type of line termination
-        let term = if Self::CODES
-            .iter()
-            .find(|(c, _)| *c == code)
-            .ok_or_else(|| Error::UnexpectedResponseCode(code))?
-            .1
-        {
-            MULTI_LINE_TERMINATION
-        } else {
-            SINGLE_LINE_TERMINATION
-        };
-
-        // Check if - depending on line termination - we have enough bytes for the whole response
-        if bytes.len() < term.len() || &bytes[bytes.len() - term.len()..] != term {
-            return Err(Error::DecodeNeedMoreBytes);
-        }
-
-        // Remove line termination string if we have all we need
-        if code > 0 {
-            bytes.truncate(bytes.len() - term.len());
-        }
-
-        // Decode the message
-        self.decoder(bytes, code)
-    }
-
-    fn decoder(&mut self, bytes: &mut BytesMut, code: u16) -> Result<()>
-    where
-        Self: Sized;
-}
-
-impl<T> GenericMessage<T> {
+impl<T> Response<T> {
     pub fn code(&self) -> u16 {
         self.code
     }
 }
 
-impl<T> Decode for GenericMessage<T>
+impl<T> Response<T>
 where
-    T: Decode,
+    T: ExpectedResponseCode,
 {
-    const CODES: ResponseCodeTuples = &[(0, false)];
+    pub fn ok(&self) -> bool {
+        self.kind.ok(self.code)
+    }
+}
 
-    fn decoder(&mut self, bytes: &mut BytesMut, _: u16) -> Result<()> {
+impl<T> ExpectedResponse for Response<T> {
+    type Response = T;
+}
+
+impl<T> ExpectedResponseCode for Response<T> {
+    const CODES: ResponseCodeTuples = &[(0, false, false)];
+}
+
+impl<T> Decode for Response<T>
+where
+    T: Decode + ExpectedResponseCode,
+{
+    fn decoder(&mut self, bytes: &mut Decoder, _: u16) -> Result<()> {
         if bytes.len() < 3 {
             return Err(Error::DecodeNeedMoreBytes);
         };
 
-        self.code = bytes
-            .split_to(4)
-            .as_ref()
-            .pipe(|b| str::from_utf8(&b[0..3]).map_err(Error::decode))?
-            .parse()
-            .map_err(Error::decode)?;
+        // We already have set a code and the buffer has advanced, do not attempt to read code
+        // another time
+        if self.code == 0 {
+            self.code = bytes.get()?;
+        }
 
         self.kind.decode(bytes, self.code)
     }
 }
 
-impl<T> Deref for GenericMessage<T> {
+impl<T> Deref for Response<T> {
     type Target = T;
 
     fn deref(&self) -> &Self::Target {
         &self.kind
     }
-}
-
-impl Decode for () {
-    const CODES: ResponseCodeTuples = &[];
-
-    fn decoder(&mut self, _: &mut BytesMut, _: u16) -> Result<()>
-    where
-        Self: Sized,
-    {
-        Ok(())
-    }
-}
-
-pub(crate) trait Encode {
-    fn encode(&self, bytes: &mut BytesMut) -> Result<()> {
-        self.encoder(bytes)?;
-
-        write!(bytes.writer(), "\r\n").map_err(Error::encode)
-    }
-
-    fn encoder(&self, bytes: &mut BytesMut) -> Result<()>;
-}
-
-pub trait ExpectedResponse {
-    type Response;
 }

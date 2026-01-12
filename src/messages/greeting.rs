@@ -1,6 +1,6 @@
-use crate::messages::{Decode, ResponseCodeTuples};
-use crate::{Error, Result};
-use bytes::BytesMut;
+use crate::decoder::{ExpectedResponseCode, ResponseCodeTuples};
+use crate::messages::{Decode, Decoder};
+use crate::Result;
 
 #[derive(Default)]
 pub struct GreetingResponse {
@@ -13,13 +13,13 @@ impl GreetingResponse {
     }
 }
 
-impl Decode for GreetingResponse {
-    const CODES: ResponseCodeTuples = &[(200, false)];
+impl ExpectedResponseCode for GreetingResponse {
+    const CODES: ResponseCodeTuples = &[(200, false, true)];
+}
 
-    fn decoder(&mut self, bytes: &mut BytesMut, _: u16) -> Result<()> {
-        self.greeting = str::from_utf8(bytes.split_to(bytes.len()).as_ref())
-            .map_err(Error::decode)?
-            .to_string();
+impl Decode for GreetingResponse {
+    fn decoder(&mut self, bytes: &mut Decoder, _: u16) -> Result<()> {
+        self.greeting = bytes.get_line()?.unwrap_or_default();
 
         Ok(())
     }

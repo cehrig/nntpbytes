@@ -1,4 +1,6 @@
-use crate::messages::{Decode, Encode, ExpectedResponse, ResponseCodeTuples};
+use crate::decoder::decoder::{Encode, ExpectedResponse};
+use crate::decoder::ExpectedResponseCode;
+use crate::messages::{Decode, Decoder, ResponseCodeTuples};
 use crate::{Error, Result};
 use bytes::{BufMut, BytesMut};
 use std::io::Write;
@@ -12,7 +14,7 @@ pub struct DateResponse {
 
 impl DateRequest {
     pub fn new() -> Self {
-        DateRequest
+        Self
     }
 }
 
@@ -32,16 +34,16 @@ impl ExpectedResponse for DateRequest {
     type Response = DateResponse;
 }
 
-impl Decode for DateResponse {
-    const CODES: ResponseCodeTuples = &[(111, false)];
+impl ExpectedResponseCode for DateResponse {
+    const CODES: ResponseCodeTuples = &[(111, false, true)];
+}
 
-    fn decoder(&mut self, bytes: &mut BytesMut, _: u16) -> Result<()>
+impl Decode for DateResponse {
+    fn decoder(&mut self, bytes: &mut Decoder, _: u16) -> Result<()>
     where
         Self: Sized,
     {
-        self.text = str::from_utf8(bytes.split_to(bytes.len()).as_ref())
-            .map_err(Error::decode)?
-            .to_string();
+        self.text = bytes.get_line()?.unwrap_or_default();
 
         Ok(())
     }
